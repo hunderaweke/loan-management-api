@@ -35,12 +35,12 @@ func (r *loanRepository) GetByID(id string) (domain.Loan, error) {
 }
 
 func (r *loanRepository) Get(filter map[string]string) ([]domain.Loan, error) {
-	status, ok := filter["status"]
 	filterOptions := bson.M{}
 	userID, ok := filter["user_id"]
 	if ok {
 		filterOptions["user_id"] = userID
 	}
+	status, ok := filter["status"]
 	if ok {
 		filterOptions["status"] = status
 	}
@@ -59,15 +59,18 @@ func (r *loanRepository) Get(filter map[string]string) ([]domain.Loan, error) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "created_at", Value: sortOrder}})
 	cursor, err := r.collection.Find(context.TODO(), filterOptions, findOptions)
 	if err != nil {
-		return nil, err
+		return []domain.Loan{}, err
 	}
 	defer cursor.Close(context.TODO())
 
 	var loans []domain.Loan
-	if err := cursor.All(context.TODO(), &loans); err != nil {
-		return nil, err
+	for cursor.Next(context.TODO()) {
+		var l domain.Loan
+		if err := cursor.Decode(&l); err != nil {
+			return loans, nil
+		}
+		loans = append(loans, l)
 	}
-
 	return loans, nil
 }
 

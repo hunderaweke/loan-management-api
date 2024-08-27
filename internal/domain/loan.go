@@ -5,11 +5,11 @@ import "time"
 const LoanColletion = "loans"
 
 type Loan struct {
-	ID        string
-	UserID    string
-	Ammount   string
-	CreatedAt time.Time
-	Status    string
+	ID        string    `json:"id" bson:"_id"`
+	UserID    string    `json:"user_id" bson:"user_id"`
+	Ammount   string    `json:"ammount" binding:"required"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+	Status    string    `json:"status"`
 }
 
 type LoanRepository interface {
@@ -21,7 +21,7 @@ type LoanRepository interface {
 }
 
 type LoanUsecase interface {
-	ApplyForLoan(userID string, amount string) (Loan, error)
+	CreateLoan(userID string, amount string) (Loan, error)
 	ViewLoanStatus(id string) (Loan, error)
 	ViewAllLoans(filter map[string]string) ([]Loan, error)
 	ApproveRejectLoan(id string, status string) (Loan, error)

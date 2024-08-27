@@ -14,11 +14,16 @@ import (
 
 type userUsecase struct {
 	userRepository domain.UserRepository
+	logRepository  domain.LogRepository
 }
 
 func NewUserUsecase(db mongoifc.Database) domain.UserUsecases {
-	repo := repositories.NewUserRepository(db)
-	return &userUsecase{userRepository: repo}
+	userRepo := repositories.NewUserRepository(db)
+	logRepo := repositories.NewLogRepository(db)
+	return &userUsecase{
+		userRepository: userRepo,
+		logRepository:  logRepo,
+	}
 }
 
 func (uc *userUsecase) Register(user domain.User) (domain.User, error) {
@@ -31,12 +36,31 @@ func (uc *userUsecase) Register(user domain.User) (domain.User, error) {
 	expirationTime := time.Now().Add(1 * time.Hour)
 	verificationToken, err := infrastructures.GenerateVerificationToken(user.ID, user.Email, "emailVerification", expirationTime)
 	if err != nil {
-		return domain.User{}, fmt.Errorf("generating token:", err)
+		return domain.User{}, fmt.Errorf("generating token: %v", err)
 	}
+
 	go infrastructures.SendVerificationEmail(user.Email, verificationToken)
-	return uc.userRepository.Create(user)
+
+	createdUser, err := uc.userRepository.Create(user)
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	// Log the registration
+	log := domain.SystemLog{
+		ID:        primitive.NewObjectID().Hex(),
+		Timestamp: time.Now(),
+		Category:  "User Registration",
+		Message:   fmt.Sprintf("User %s registered with email %s", user.ID, user.Email),
+	}
+	if err := uc.logRepository.Create(log); err != nil {
+		fmt.Printf("Failed to log user registration: %v\n", err)
+	}
+
+	return createdUser, nil
 }
 
+// VerifyEmail verifies the user's email with the token
 func (uc *userUsecase) VerifyEmail(token, email string) error {
 	user, err := uc.userRepository.GetByEmail(email)
 	if err != nil {
@@ -45,7 +69,9 @@ func (uc *userUsecase) VerifyEmail(token, email string) error {
 	if err := infrastructures.ValidateVerificationToken(token, email, user.ID, "emailVerification"); err != nil {
 		return err
 	}
-	uc.userRepository.Update(user.ID, domain.User{IsActive: true})
+	if _, err := uc.userRepository.Update(user.ID, domain.User{IsActive: true}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -57,28 +83,55 @@ func (uc *userUsecase) Login(email, password string) (domain.User, error) {
 	if !user.IsActive {
 		return domain.User{}, fmt.Errorf("user account is not activated")
 	}
-	if infrastructures.ComparePassword(user.Password, password) {
-		return user, nil
+	if !infrastructures.ComparePassword(user.Password, password) {
+		return domain.User{}, fmt.Errorf("incorrect password or email")
 	}
-	return domain.User{}, fmt.Errorf("incorrect password or email")
+
+	log := domain.SystemLog{
+		ID:        primitive.NewObjectID().Hex(),
+		Timestamp: time.Now(),
+		Category:  "Login Attempt",
+		Message:   fmt.Sprintf("User %s logged in successfully", user.ID),
+	}
+	if err := uc.logRepository.Create(log); err != nil {
+		fmt.Printf("Failed to log successful login attempt: %v\n", err)
+	}
+
+	return user, nil
 }
 
 func (uc *userUsecase) GetProfile(userID string) (domain.User, error) {
-	return uc.userRepository.GetByID(userID)
+	user, err := uc.userRepository.GetByID(userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
 }
 
 func (uc *userUsecase) ForgetPassword(email string) error {
-	fmt.Println(email)
 	user, err := uc.userRepository.GetByEmail(email)
 	if err != nil {
 		return err
 	}
 	if !user.IsActive {
-		return errors.New("reseting unactivated account is not allowed")
+		return errors.New("resetting unactivated account is not allowed")
 	}
 	expirationTime := time.Now().Add(1 * time.Hour)
 	token, err := infrastructures.GenerateVerificationToken(user.ID, email, "ForgetPassword", expirationTime)
+	if err != nil {
+		return err
+	}
 	go infrastructures.SendPasswordResetEmail(email, token)
+	log := domain.SystemLog{
+		ID:        primitive.NewObjectID().Hex(),
+		Timestamp: time.Now(),
+		Category:  "Password Reset Request",
+		Message:   fmt.Sprintf("User %s requested a password reset", user.ID),
+	}
+	if err := uc.logRepository.Create(log); err != nil {
+		fmt.Printf("Failed to log password reset request: %v\n", err)
+	}
+
 	return nil
 }
 
@@ -94,7 +147,20 @@ func (uc *userUsecase) ResetPassword(token, email, newPassword string) error {
 	if err != nil {
 		return err
 	}
-	uc.userRepository.Update(user.ID, domain.User{Password: hashedPassword})
+	if _, err := uc.userRepository.Update(user.ID, domain.User{Password: hashedPassword}); err != nil {
+		return err
+	}
+
+	log := domain.SystemLog{
+		ID:        primitive.NewObjectID().Hex(),
+		Timestamp: time.Now(),
+		Category:  "Password Reset Completion",
+		Message:   fmt.Sprintf("User %s completed password reset", user.ID),
+	}
+	if err := uc.logRepository.Create(log); err != nil {
+		fmt.Printf("Failed to log password reset completion: %v\n", err)
+	}
+
 	return nil
 }
 
@@ -115,9 +181,17 @@ func (uc *userUsecase) RefreshAccessToken(refreshToken string) (string, error) {
 }
 
 func (uc *userUsecase) GetAllUsers() ([]domain.User, error) {
-	return uc.userRepository.Get()
+	users, err := uc.userRepository.Get()
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func (uc *userUsecase) GetUserByID(userID string) (domain.User, error) {
-	return uc.userRepository.GetByID(userID)
+	user, err := uc.userRepository.GetByID(userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
 }

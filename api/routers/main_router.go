@@ -1,6 +1,8 @@
 package routers
 
 import (
+	"loan-management/api/controllers"
+	"loan-management/api/middlewares"
 	"loan-management/config"
 	"loan-management/database"
 	"log"
@@ -18,6 +20,9 @@ func Run() {
 		log.Fatal(err)
 	}
 	router := gin.Default()
+	logController := controllers.NewLogController(db)
+	router.GET("/admin/logs", middlewares.JWTMiddleware(), middlewares.AdminMiddleware(), logController.GetLogs)
 	AddUserRoutes(router, db)
+	AddLoanRoutes(router, db)
 	router.Run(config.Server.Port)
 }
