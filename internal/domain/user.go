@@ -25,6 +25,9 @@ type UserUsecases interface {
 	VerifyEmail(token, email string) error
 	Login(password, email string) (User, error)
 	GetProfile(userID string) (User, error)
-	ForgetPassword(email string) (string, error)
-	ResetPassword(token, newPassword string) (string, error)
+	ForgetPassword(email string) error
+	ResetPassword(token, email, newPassword string) error
+	RefreshAccessToken(refreshToken string) (string, error)
+	GetAllUsers() ([]User, error)
+	GetUserByID(string) (User, error)
 }

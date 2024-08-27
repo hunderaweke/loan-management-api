@@ -65,4 +65,79 @@ func (uc *UserController) Login(ctx *gin.Context) {
 }
 
 func (uc *UserController) RefreshAccessToken(ctx *gin.Context) {
+	token := struct {
+		RefreshToken string `json:"refresh_token"`
+	}{}
+	if err := ctx.ShouldBind(&token); err != nil {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"error": "refresh_token field is required"})
+		return
+	}
+	accessToken, err := uc.userUsecase.RefreshAccessToken(token.RefreshToken)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"access_token": accessToken})
+}
+
+func (uc *UserController) ForgetPassword(ctx *gin.Context) {
+	email := ctx.Query("email")
+	err := uc.userUsecase.ForgetPassword(string(email))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "password reset link sent to your email"})
+}
+
+func (uc *UserController) ResetPassword(ctx *gin.Context) {
+	email := ctx.Query("email")
+	token := ctx.Query("token")
+	newPassword := struct {
+		Password        string `json:"password" binding:"required"`
+		ConfirmPassword string `json:"confirm_password" binding:"required"`
+	}{}
+	if err := ctx.ShouldBind(&newPassword); err != nil {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"error": "unacceptable data format"})
+		return
+	}
+	if newPassword.Password != newPassword.ConfirmPassword {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"error": "password and confirm password don match"})
+		return
+	}
+	err := uc.userUsecase.ResetPassword(token, email, newPassword.Password)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusAccepted, gin.H{"message": "password update successful"})
+}
+
+func (uc *UserController) GetProfile(ctx *gin.Context) {
+	userID, _ := ctx.Get("userID")
+	user, err := uc.userUsecase.GetProfile(userID.(string))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, user)
+}
+
+func (uc *UserController) GetUserByID(ctx *gin.Context) {
+	userID := ctx.Param("id")
+	user, err := uc.userUsecase.GetUserByID(userID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, user)
+}
+
+func (uc *UserController) GetAllUsers(ctx *gin.Context) {
+	users, err := uc.userUsecase.GetAllUsers()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, users)
 }

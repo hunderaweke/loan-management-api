@@ -6,7 +6,7 @@ import (
 	"net/smtp"
 )
 
-func SendEmail(subject, data string, to []string) error {
+func sendEmail(subject, data string, to []string) error {
 	config, err := config.LoadConfig()
 	if err != nil {
 		return err
@@ -29,7 +29,7 @@ func SendVerificationEmail(email, token string) error {
 	if err != nil {
 		return err
 	}
-	verificationLink := fmt.Sprintf(config.Server.Url+config.Server.Port+"/users/verify?email=%s&token=%s", email, token)
+	verificationLink := fmt.Sprintf(config.Server.Url+config.Server.Port+"/users/verify-email?email=%s&token=%s", email, token)
 	subject := "Verify Your Email Address"
 	body := fmt.Sprintf(`
 		<!DOCTYPE html>
@@ -47,5 +47,32 @@ func SendVerificationEmail(email, token string) error {
 			<p>Best regards,<br>The Loan Manager Team</p>
 		</body>
 		</html>`, verificationLink)
-	return SendEmail(subject, body, []string{email})
+	return sendEmail(subject, body, []string{email})
+}
+
+func SendPasswordResetEmail(email, token string) error {
+	config, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	resetLink := fmt.Sprintf("%s%s/users/password-update?email=%s&token=%s", config.Server.Url, config.Server.Port, email, token)
+	subject := "Reset Your Password"
+	body := fmt.Sprintf(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Password Reset</title>
+        </head>
+        <body>
+            <p>Hello,</p>
+            <p>We received a request to reset your password. Please click the link below to choose a new password:</p>
+            <p><a href="%s">Reset Password</a></p>
+            <p>If you did not request a password reset, you can ignore this email.</p>
+            <p>Best regards,<br>The Loan Manager Team</p>
+        </body>
+        </html>`, resetLink)
+	return sendEmail(subject, body, []string{email})
 }

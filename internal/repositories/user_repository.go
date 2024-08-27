@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"loan-management/internal/domain"
-	"time"
 
 	"github.com/sv-tools/mongoifc"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -36,7 +34,6 @@ func NewUserRepository(db mongoifc.Database) domain.UserRepository {
 }
 
 func (r *userRepository) Create(user domain.User) (domain.User, error) {
-	user.ID = primitive.NewObjectIDFromTimestamp(time.Now()).Hex()
 	_, err := r.collection.InsertOne(context.TODO(), user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
@@ -59,8 +56,12 @@ func (r *userRepository) Update(id string, updateData domain.User) (domain.User,
 	if updateData.Password != "" {
 		update["$set"].(bson.M)["password"] = updateData.Password
 	}
-	update["$set"].(bson.M)["is_active"] = updateData.IsActive
-	update["$set"].(bson.M)["is_admin"] = updateData.IsAdmin
+	if updateData.IsActive {
+		update["$set"].(bson.M)["is_active"] = updateData.IsActive
+	}
+	if updateData.IsAdmin {
+		update["$set"].(bson.M)["is_admin"] = updateData.IsAdmin
+	}
 	_, err := r.collection.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		return domain.User{}, ErrFailedToUpdate

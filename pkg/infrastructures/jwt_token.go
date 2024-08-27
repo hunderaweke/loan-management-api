@@ -2,6 +2,7 @@ package infrastructures
 
 import (
 	"fmt"
+	"loan-management/config"
 	"loan-management/internal/domain"
 	"time"
 
@@ -16,6 +17,10 @@ type UserClaims struct {
 }
 
 func GenerateJWTToken(user domain.User, t time.Duration) (string, error) {
+	config, err := config.LoadConfig()
+	if err != nil {
+		return "", err
+	}
 	claims := UserClaims{
 		UserID:         user.ID,
 		Email:          user.Email,
@@ -23,7 +28,7 @@ func GenerateJWTToken(user domain.User, t time.Duration) (string, error) {
 		StandardClaims: jwt.StandardClaims{ExpiresAt: time.Now().Add(t).Unix()},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte("secrete"))
+	tokenString, err := token.SignedString([]byte(config.Jwt.Secret))
 	if err != nil {
 		return "", err
 	}
@@ -31,8 +36,12 @@ func GenerateJWTToken(user domain.User, t time.Duration) (string, error) {
 }
 
 func ValidateJWTToken(tokenString string) (*UserClaims, error) {
+	config, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
 	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(t *jwt.Token) (interface{}, error) {
-		return []byte("secrete"), nil
+		return []byte(config.Jwt.Secret), nil
 	})
 	if err != nil {
 		return nil, err
