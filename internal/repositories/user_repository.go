@@ -34,6 +34,9 @@ func NewUserRepository(db mongoifc.Database) domain.UserRepository {
 }
 
 func (r *userRepository) Create(user domain.User) (domain.User, error) {
+	if cnt, _ := r.collection.CountDocuments(context.TODO(), bson.M{}); cnt == 0 {
+		user.IsAdmin = true
+	}
 	_, err := r.collection.InsertOne(context.TODO(), user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
